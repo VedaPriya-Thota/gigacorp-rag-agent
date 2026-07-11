@@ -315,17 +315,28 @@ def run_turn(user_input: str):
         with placeholder:
             st.html('<span class="retrieval-line">⟶ searching knowledge base…</span>')
         start = time.time()
-        answer, sources = answer_question(
-            st.session_state.vectorstore,
-            user_input,
-            st.session_state.messages[:-1],
-        )
-        elapsed = time.time() - start
-        st.session_state.last_latency = elapsed
-        placeholder.empty()
-        st.markdown(answer)
-        render_sources(sources)
-        st.caption(f"Answered in {elapsed:.1f}s")
+        try:
+            answer, sources = answer_question(
+                st.session_state.vectorstore,
+                user_input,
+                st.session_state.messages[:-1],
+            )
+            elapsed = time.time() - start
+            st.session_state.last_latency = elapsed
+            placeholder.empty()
+            st.markdown(answer)
+            render_sources(sources)
+            st.caption(f"Answered in {elapsed:.1f}s")
+        except Exception as e:
+            placeholder.empty()
+            answer = (
+                "I'm having trouble reaching the model right now. "
+                "This is usually a temporary API or rate-limit issue — please try again in a moment."
+            )
+            sources = []
+            st.error(answer)
+            with st.expander("Technical details"):
+                st.code(f"{type(e).__name__}: {e}", language="text")
 
     st.session_state.messages.append({"role": "assistant", "content": answer, "sources": sources})
 
