@@ -2,6 +2,10 @@
 
 A conversational customer support assistant that answers questions using a local knowledge base (RAG), cites its sources by line number, and remembers context across a conversation.
 
+🔗 **Live App:** [gigacorp-rag-agentgit-cnjkiosukttf8eahvwvwz5.streamlit.app](https://gigacorp-rag-agentgit-cnjkiosukttf8eahvwvwz5.streamlit.app)
+
+🎥 **Demo Video:** [Watch the walkthrough](https://drive.google.com/file/d/1i5eErSTRqlHLDEv7YHcfztT2VmKIP_fP/view?usp=sharing) — covers user flow, frontend, backend calls, vector DB retrieval, and session memory.
+
 ## Architecture
 
 ```
@@ -19,7 +23,7 @@ Vector Store (src/vectorstore.py)
    │  - FAISS index over data/gigacorp_faq.txt
    │  - chunked by FAQ section, tagged with line-number metadata
    ▼
-Local Embeddings (sentence-transformers/all-MiniLM-L6-v2)
+Local Embeddings (sentence-transformers/all-MiniLM-L6-v2, forced to CPU device)
 ```
 
 **Why this stack:**
@@ -27,6 +31,7 @@ Local Embeddings (sentence-transformers/all-MiniLM-L6-v2)
 - **Groq (Llama 3.1 8B Instant)** — free tier, very low latency, good enough reasoning for FAQ-style Q&A.
 - **Section-based chunking** (not fixed-size sliding windows) — the FAQ is naturally organized by topic (shipping, returns, hours, tiers), so chunking by section keeps each citation coherent and topically complete.
 - **Explicit history-in-prompt memory** — rather than an opaque memory object, the last few turns are passed directly into the prompt. This is what lets the agent resolve "how much to ship *there*?" back to a country mentioned two turns earlier, and it's easy to inspect/debug.
+- **CPU-forced embeddings device** — explicitly set via `model_kwargs={"device": "cpu"}` to avoid a known `NotImplementedError: Cannot copy out of meta tensor` crash caused by newer `transformers`/`accelerate` versions defaulting to lazy meta-device model loading on hosted platforms like Streamlit Cloud.
 
 ## Features
 
@@ -72,6 +77,8 @@ Local Embeddings (sentence-transformers/all-MiniLM-L6-v2)
    ```
 4. Deploy. First load will take a little longer as the embedding model downloads.
 
+**Known deployment gotcha:** if you see `NotImplementedError: Cannot copy out of meta tensor` on first deploy, it means `transformers`/`huggingface-hub` resolved to versions that changed their default model-loading behavior. This repo's `requirements.txt` already pins compatible versions (`transformers==4.44.2`, `huggingface-hub==0.24.6`, `tokenizers==0.19.1`) and `vectorstore.py` explicitly forces `device="cpu"` to avoid it — if you fork this repo, keep those pins.
+
 ## Folder Structure
 
 ```
@@ -89,7 +96,7 @@ gigacorp-rag-agent/
 
 ## Test Instructions
 
-No login required. Suggested test flow to demonstrate memory + citations:
+No login required. Try it directly on the [live app](https://gigacorp-rag-agentgit-cnjkiosukttf8eahvwvwz5.streamlit.app), or run locally. Suggested test flow to demonstrate memory + citations:
 
 1. Ask: **"Do you ship to India?"**
 2. Then ask: **"How much does it cost to ship there?"** — the agent should resolve "there" to India without you repeating it.
