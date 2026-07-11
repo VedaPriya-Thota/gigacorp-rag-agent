@@ -52,7 +52,6 @@ def build_documents(file_path: str = DATA_PATH) -> list[Document]:
     for i, raw_line in enumerate(lines, start=1):
         stripped = raw_line.strip()
         if stripped.startswith("===") and stripped.endswith("==="):
-            # Flush whatever we accumulated for the previous section
             flush(i - 1)
             current_section = stripped.strip("= ").strip()
             current_lines = []
@@ -64,10 +63,24 @@ def build_documents(file_path: str = DATA_PATH) -> list[Document]:
     return documents
 
 
+def get_embeddings() -> HuggingFaceEmbeddings:
+    """Explicitly force CPU device. Without this, newer transformers/accelerate
+    versions can lazily initialize the model on a 'meta' device for memory
+    efficiency, and then crash with 'NotImplementedError: Cannot copy out of
+    meta tensor' when sentence-transformers tries to move it -- this is a
+    known version-mismatch issue on hosted platforms like Streamlit Cloud,
+    not a problem with the RAG logic itself. Forcing device='cpu' here
+    bypasses that lazy-loading path entirely."""
+    return HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2",
+        model_kwargs={"device": "cpu"},
+    )
+
+
 def build_vectorstore(persist: bool = True) -> FAISS:
     """Build (and optionally persist) the FAISS index from the FAQ document."""
     docs = build_documents()
-    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    embeddings = get_embeddings()
     store = FAISS.from_documents(docs, embeddings)
     if persist:
         store.save_local(INDEX_PATH)
@@ -76,7 +89,7 @@ def build_vectorstore(persist: bool = True) -> FAISS:
 
 def load_vectorstore() -> FAISS:
     """Load an existing FAISS index from disk, building it first if missing."""
-    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    embeddings = get_embeddings()
     if os.path.exists(INDEX_PATH):
         return FAISS.load_local(INDEX_PATH, embeddings, allow_dangerous_deserialization=True)
     return build_vectorstore(persist=True)
